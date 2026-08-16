@@ -10,7 +10,7 @@ def call (Map configMap){
             acc_id = "271434548230"
             project = configMap.get("project")
             component = configMap.get("component")
-            org = "daws-90s"
+            org = "srcm333"
         }
         options {
             disableConcurrentBuilds()
@@ -81,7 +81,7 @@ def call (Map configMap){
                         sh '''
                             set -e
 
-                            REPO="${org}/${component}"
+                            REPO='${org}/${component}'
 
                             curl -s -L \
                             -H "Accept: application/vnd.github+json" \
