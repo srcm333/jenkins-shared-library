@@ -12,6 +12,7 @@ pipeline {
                     sh """
                         echo 'Building..'
                         echo "Project: ${project}, component: ${component}"
+                        printenv | sort
                     """
                 }
             }
