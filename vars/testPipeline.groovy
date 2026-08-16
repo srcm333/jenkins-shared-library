@@ -1,11 +1,19 @@
-def call (){
+def call (Map configMap){
 pipeline {
     agent any
-
+    environment {
+        project = configMap.get("project")
+        component = configMap.get("component")
+    }
     stages {
         stage('Build') {
             steps {
-                echo 'Building..'
+                script {
+                    sh """
+                        echo 'Building..'
+                        echo "Project: ${project}, component: ${component}"
+                    """
+                }
             }
         }
         stage('Test') {
