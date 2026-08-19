@@ -1,4 +1,5 @@
 def call (Map configMap){
+    def appVersion = ""
     pipeline {
         agent { 
             node { 
@@ -6,7 +7,6 @@ def call (Map configMap){
             } 
         }
         environment {
-            appVersion = ""
             acc_id = "271434548230"
             project = configMap.get("project")
             component = configMap.get("component")
@@ -57,6 +57,7 @@ def call (Map configMap){
                         }
                         catch(Exception e){
                             utils.updateCommitStatus("failure", "unit test are failed", "unit-tests")
+                            throw e
 
                         }
                     } 
@@ -100,7 +101,7 @@ def call (Map configMap){
                                     -H "Accept: application/vnd.github+json" \
                                     -H "Authorization: Bearer ${GH_TOKEN}" \
                                     -H "X-GitHub-Api-Version: 2026-03-10" \
-                                    "https://api.github.com/repos/${REPO}/dependabot/alerts?state=open" \
+                                    "https://api.github.com/${REPO}/dependabot/alerts?state=open" \
                                     -o alerts.json
         
                                     echo "---- Open Dependabot Alerts ----"
