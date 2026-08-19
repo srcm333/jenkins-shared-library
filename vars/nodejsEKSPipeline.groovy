@@ -10,7 +10,7 @@ def call (Map configMap){
             acc_id = "271434548230"
             project = configMap.get("project")
             component = configMap.get("component")
-            org = "daws-90s"
+            org = "srcm333"
         }
         options {
             disableConcurrentBuilds()
@@ -55,7 +55,7 @@ def call (Map configMap){
                     } 
                 }
             }
-            /* stage('SonarQube Analysis') {
+            stage('SonarQube Analysis') {
                 steps {
                     // 'My SonarQube Server' must match the name configured in Jenkins System Settings
                     withSonarQubeEnv('sonar-server') {
@@ -74,7 +74,7 @@ def call (Map configMap){
                         }
                     }
                 }
-            } */
+            }
             stage('Check Dependabot Alerts') {
                 steps {
                     withCredentials([string(credentialsId: 'github-token', variable: 'GH_TOKEN')]) {
@@ -87,7 +87,7 @@ def call (Map configMap){
                             -H "Accept: application/vnd.github+json" \
                             -H "Authorization: Bearer ${GH_TOKEN}" \
                             -H "X-GitHub-Api-Version: 2026-03-10" \
-                            "https://api.github.com/repos/${REPO}/dependabot/alerts?state=open" \
+                            "https://api.github.com/repos/vars/${REPO}/dependabot/alerts?state=open" \
                             -o alerts.json
 
                             echo "---- Open Dependabot Alerts ----"
