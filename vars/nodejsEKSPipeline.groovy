@@ -1,12 +1,12 @@
 def call (Map configMap){
-    def appVersion = ""
     pipeline {
         agent { 
             node { 
-                label 'ROBOSHOP'
+                label 'ROBOSHOP' 
             } 
         }
         environment {
+            def appVersion = ""
             acc_id = "271434548230"
             project = configMap.get("project")
             component = configMap.get("component")
@@ -25,18 +25,17 @@ def call (Map configMap){
         } */
         // Build
         stages {
-            stage('Read version'){
+            stage('read-version'){
                 steps{
                     script {
                         def packageJson = readJSON file: 'package.json'
                         // Extract the version property
                         appVersion = packageJson.version
                         echo "The application version is: ${appVersion}"
-                        
                     }
                 }
             }
-            stage('Install Dependencies') {
+            stage('install-dependencies') {
                 steps {
                     script {
                         sh """
@@ -46,24 +45,22 @@ def call (Map configMap){
                 }
             }
             // this command gives us coverage report and test cases report, sonarqube access this to check quality gate
-            stage('Unit tests') {
+            stage('unit-tests') {
                 steps {
                     script {
-                        try{
+                        try {
                             sh """
                                 npm test
                             """
-                            utils.updateCommitStatus("success", "unit test are successful", "unit-tests")
-                        }
-                        catch(Exception e){
-                            utils.updateCommitStatus("failure", "unit test are failed", "unit-tests")
+                            utils.updateCommitStatus('SUCCESS', 'Unit tests passed', 'unit-tests')
+                        } catch (Exception e) {
+                            utils.updateCommitStatus('FAILURE', 'Unit tests failed', 'unit-tests')
                             throw e
-
                         }
                     } 
                 }
             }
-            stage('SonarQube Analysis') {
+            /* stage('sonar-analysis') {
                 steps {
                     // 'My SonarQube Server' must match the name configured in Jenkins System Settings
                     withSonarQubeEnv('sonar-server') {
@@ -71,192 +68,209 @@ def call (Map configMap){
                     }
                 }
             }
-            stage('SonarQube Quality Gate') {
+            stage('sonar-scan') {
                 steps {
                     timeout(time: 10, unit: 'MINUTES') {
                         script {
                             def qg = waitForQualityGate() // Pauses pipeline
                             if (qg.status != 'OK') {
-                                utils.updateCommitStatus("failure", "sonar scans are failed", "sonar-scan")
+                                utils.updateCommitStatus('FAILURE', 'Sonar Scan failed', 'sonar-scan')
                                 error "Pipeline aborted: ${qg.status}"
                             }
-                            else{
-                                utils.updateCommitStatus("success", "sonar scans are success", "sonar-scan")
+                            else {
+                                utils.updateCommitStatus('success', 'Sonar Scan success', 'sonar-scan')
                             }
                         }
                     }
                 }
-            }
-            stage('Check Dependabot Alerts') {
-    steps {
-        script {
-            try {
-                withCredentials([
-                    string(credentialsId: 'github-token', variable: 'GH_TOKEN')
-                ]) {
-                    sh '''
-                        set -e
+            } */
+            stage('library-scan') {
+                steps {
+                    script {
+                        try{
+                            withCredentials([string(credentialsId: 'github-token', variable: 'GH_TOKEN')]) {
+                                sh '''
+                                    set -e
 
-                        REPO="${org}/${component}"
+                                    REPO="${org}/${component}"
 
-                        echo "ORG=${org}"
-                        echo "COMPONENT=${component}"
-                        echo "REPO=${REPO}"
+                                    curl -s -L \
+                                    -H "Accept: application/vnd.github+json" \
+                                    -H "Authorization: Bearer ${GH_TOKEN}" \
+                                    -H "X-GitHub-Api-Version: 2026-03-10" \
+                                    "https://api.github.com/repos/${REPO}/dependabot/alerts?state=open" \
+                                    -o alerts.json
 
-                        curl -sS -f -L \
-                            -H "Accept: application/vnd.github+json" \
-                            -H "Authorization: Bearer ${GH_TOKEN}" \
-                            // -H "X-GitHub-Api-Version: 2026-03-10" \
-                            -H "X-GitHub-Api-Version: 2022-11-28" \
-                            "https://api.github.com/repos/${REPO}/dependabot/alerts?state=open" \
-                            -o alerts.json
+                                    echo "---- Open Dependabot Alerts ----"
+                                    jq -r '.[] | "\\(.number)\\t\\(.security_vulnerability.severity)\\t\\(.dependency.package.name)\\t\\(.security_advisory.ghsa_id)"' alerts.json
 
-                        echo "---- Open Dependabot Alerts ----"
+                                    HIGH_CRITICAL_COUNT=$(jq '[.[] | select(.security_vulnerability.severity == "high" or .security_vulnerability.severity == "critical")] | length' alerts.json)
 
-                        jq -r '
-                            .[] |
-                            "\(.number)\t\(.security_vulnerability.severity)\t\(.dependency.package.name)\t\(.security_advisory.ghsa_id)"
-                        ' alerts.json
+                                    echo "High/Critical alert count: ${HIGH_CRITICAL_COUNT}"
 
-                        HIGH_CRITICAL_COUNT=$(jq '
-                            [
-                                .[] |
-                                select(
-                                    .security_vulnerability.severity == "high"
-                                    or
-                                    .security_vulnerability.severity == "critical"
-                                )
-                            ] | length
-                        ' alerts.json)
-
-                        echo "High/Critical alert count: ${HIGH_CRITICAL_COUNT}"
-
-                        if [ "${HIGH_CRITICAL_COUNT}" -gt 0 ]; then
-                            echo "Found ${HIGH_CRITICAL_COUNT} High/Critical dependency alert(s)."
-                            exit 1
-                        else
-                            echo "No High/Critical dependency alerts found."
-                        fi
-                    '''
-
-                    utils.updateCommitStatus(
-                        "success",
-                        "library scan success",
-                        "library-scan"
-                    )
+                                    if [ "$HIGH_CRITICAL_COUNT" -gt 0 ]; then
+                                        echo "❌ Found ${HIGH_CRITICAL_COUNT} High/Critical severity dependency alert(s). Failing build."
+                                        exit 1
+                                    else
+                                        echo "✅ No High/Critical dependency alerts found."
+                                    fi
+                                '''
+                            }
+                            utils.updateCommitStatus('SUCCESS', 'Library scan passed', 'library-scan')
+                        }
+                        catch (Exception e){
+                            utils.updateCommitStatus('FAILURE', 'Library scan failed', 'library-scan')
+                            throw e
+                        }
+                    }
                 }
             }
-            catch (Exception e) {
-                utils.updateCommitStatus(
-                    "failure",
-                    "library scan failed",
-                    "library-scan"
-                )
-                throw e
-            }
-        }
-    }
-}
-            stage('Docker Build') {
+            stage('build-image') {
                 steps {
                     script {
                         // in this block we get aws authentication
-                        try{
+                        try {
                             withAWS(credentials: 'aws-creds', region: 'us-east-1') {
                                 sh """
                                     aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin ${acc_id}.dkr.ecr.us-east-1.amazonaws.com
                                     docker build -t ${acc_id}.dkr.ecr.us-east-1.amazonaws.com/${project}/${component}:${appVersion} .
                                 """
                             }
-                            utils.updateCommitStatus("success", "image build success", "build-image")
+                            utils.updateCommitStatus('success', 'Docker image build', 'build-image')
                         }
-                        catch(Exception e){
-                            utils.updateCommitStatus("failure", "image build failed", "build-image")
-                            throw e
-                        }
-                    }
-                }
-            }
-            stage('Trivy Scan') {
-                steps {
-                    script {
-                        def dockerfileScan = sh(
-                            script: """
-                                trivy config --exit-code 1 --severity HIGH,CRITICAL --format table ./Dockerfile
-                            """,
-                            returnStatus: true
-                        )
-
-                        def imageScan = sh(
-                            script: """
-                                trivy image --scanners vuln --pkg-types os --exit-code 1 --severity HIGH,CRITICAL --format table ${acc_id}.dkr.ecr.us-east-1.amazonaws.com/${project}/${component}:${appVersion}
-                            """,
-                            returnStatus: true
-                        )
-
-                        if (dockerfileScan != 0 || imageScan != 0) {
-                            utils.updateCommitStatus("failure", "trivy scan failed", "trivy-scan")
-                            error "Trivy found HIGH/CRITICAL issues in Dockerfile and/or OS packages. Failing pipeline."
-                        }
-                        else{
-                            utils.updateCommitStatus("success", "trivy scan success", "trivy-scan")
-                        }
-                    }
-                }
-            }
-            stage('ECR Image push') {
-                steps {
-                    script {
-                        // in this block we get aws authentication
-                        try{
-                            withAWS(credentials: 'aws-creds', region: 'us-east-1') {
-                                sh """
-                                    aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin ${acc_id}.dkr.ecr.us-east-1.amazonaws.com
-                                    docker push ${acc_id}.dkr.ecr.us-east-1.amazonaws.com/${project}/${component}:${appVersion}
-                                """
-                            }
-                            utils.updateCommitStatus("success", "image push success", "push-image")
-                        }
-                        catch(Exception e){
-                            utils.updateCommitStatus("failure", "image push failed", "push-image")
+                        catch (Exception e) {
+                            utils.updateCommitStatus('failure', 'Docker image faied', 'build-image')
                             throw e
                         }
                         
                     }
                 }
             }
-            stage('Deploy') {
-                when {
-                    // Evaluates the boolean parameter directly
-                    expression { "${params.DEPLOY}" == "true" }
-                }
-                /* input {
-                    message "Should we continue?"
-                    ok "Yes, we should."
-                    submitter "alice,bob"
-                    parameters {
-                        string(name: 'PERSON', defaultValue: 'Mr Jenkins', description: 'Who should I say hello to?')
-                    }
-                } */
+            stage('trivy-scan') {
                 steps {
                     script {
-                        sh """
-                            echo "Deploying"
-                        """
+                        def osScan = sh(script: """
+                            trivy image --scanners vuln --pkg-types os \
+                            --severity HIGH,CRITICAL --exit-code 1 \
+                            --format table --output trivy-os-report.txt \
+                            160885265516.dkr.ecr.us-east-1.amazonaws.com/${project}/${component}:${appVersion}
+                        """, returnStatus: true)
+
+                        def dockerfileScan = sh(script: """
+                            trivy config --severity HIGH,CRITICAL --exit-code 1 \
+                            --format table --output trivy-dockerfile-report.txt \
+                            Dockerfile
+                        """, returnStatus: true)
+
+                        archiveArtifacts artifacts: 'trivy-*.txt', allowEmptyArchive: true
+
+                        if (osScan != 0 || dockerfileScan != 0) {
+                            utils.updateCommitStatus('failure', 'trivy scan failed', 'trivy-scan')
+                            error("Trivy found HIGH/CRITICAL issues — OS scan exit: ${osScan}, Dockerfile scan exit: ${dockerfileScan}")
+                        }
+                        utils.updateCommitStatus('success', 'trivy scan success', 'trivy-scan')
+                    }
+                }
+            }
+            stage('push-image-to-ecr'){
+                steps{
+                    script{
+                        try {
+                            withAWS(credentials: 'aws-creds', region: 'us-east-1') {
+                                sh """
+                                docker push ${acc_id}.dkr.ecr.us-east-1.amazonaws.com/${project}/${component}:${appVersion}
+                                """
+                            }
+                            utils.updateCommitStatus('success', 'push image to ECR', 'push-image')
+                        }
+                        catch(Exception e){
+                            utils.updateCommitStatus('failure', 'push image to ECR', 'push-image')
+                            throw e
+                        }
+                    }
+                }
+            }
+            stage('dev-deploy') {
+                steps {
+                    script {
+                        try {
+                            withAWS(credentials: 'aws-creds', region: 'us-east-1') {
+                                sh """
+                                    aws eks update-kubeconfig --name roboshop --region us-east-1
+
+                                    helm upgrade --install ${component} ./helm \
+                                        -f ./helm/values-dev.yaml \
+                                        --namespace roboshop-dev \
+                                        --create-namespace \
+                                        --set deployment.imageVersion=${appVersion} \
+                                        --wait --timeout 5m
+
+                                    kubectl rollout status deployment/${component} -n roboshop-dev --timeout=120s
+                                """
+                            }
+                            utils.updateCommitStatus('success', 'Deployed to roboshop-dev', 'dev-deploy')
+                        }
+                        catch (Exception e) {
+                            utils.updateCommitStatus('failure', 'Deploy to roboshop-dev failed', 'dev-deploy')
+                            throw e
+                        }
+                    }
+                }
+            }
+            stage('api-tests') {
+                steps {
+                    script {
+                        try {
+                            build job: 'ROBOSHOP/catalogue-api-tests', parameters: [
+                                string(name: 'NAMESPACE', value: 'roboshop-dev'),
+                                string(name: 'COMMIT_ID', value: env.GIT_COMMIT)
+                            ], wait: true, propagate: true
+                            utils.updateCommitStatus('success', 'catalogue-api-tests passed', 'api-tests')
+                        }
+                        catch (Exception e) {
+                            utils.updateCommitStatus('failure', 'catalogue-api-tests failed', 'api-tests')
+                            throw e
+                        }
+                    }
+                }
+            }
+            stage('raise-pr') {
+                when {
+                    not { branch 'main' }
+                }
+                steps {
+                    script {
+                        try {
+                            utils.createPullRequest('main', "${component}: ${env.BRANCH_NAME} -> main", "Automated PR after successful dev-deploy and api-tests.\n\nBuild: ${env.BUILD_URL}console")
+                            utils.updateCommitStatus('success', 'PR raised/verified', 'raise-pr')
+                        }
+                        catch (Exception e) {
+                            utils.updateCommitStatus('failure', 'Failed to raise PR', 'raise-pr')
+                            throw e
+                        }
                     }
                 }
             }
         }
 
-        post { 
-            always { 
-                echo 'I will always say Hello again!'
+        post {
+            success {
+                // slackSend(
+                //     channel: '#test-cii',
+                //     color: 'good',
+                //     tokenCredentialId: 'slack-token',
+                //     message: "✅ *${component}* pipeline succeeded — build #${env.BUILD_NUMBER} (<${env.BUILD_URL}console|console>)"
+                // )
+                echo "success"
             }
-            success { 
-                echo 'I will run when success'
-            }
-            failure { 
-                echo 'I will Run when it is failed'
+            failure {
+                /* slackSend(
+                    channel: '#test-cii',
+                    color: 'danger',
+                    tokenCredentialId: 'slack-token',
+                    message: "❌ *${component}* pipeline failed — build #${env.BUILD_NUMBER} (<${env.BUILD_URL}console|console>)"
+                ) */
+                echo "failed"
             }
         }
     }
