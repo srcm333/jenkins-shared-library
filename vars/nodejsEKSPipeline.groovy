@@ -45,7 +45,7 @@ def call (Map configMap){
                 }
             }
             // this command gives us coverage report and test cases report, sonarqube access this to check quality gate
-            stage('unit-tests') {
+            /* stage('unit-tests') {
                 steps {
                     script {
                         try {
@@ -57,6 +57,15 @@ def call (Map configMap){
                             utils.updateCommitStatus('FAILURE', 'Unit tests failed', 'unit-tests')
                             throw e
                         }
+                    } 
+                }
+            } */
+            stage('Unit tests') {
+                steps {
+                    script {
+                        sh """
+                            npm test
+                        """
                     } 
                 }
             }
