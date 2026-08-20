@@ -60,18 +60,18 @@ def call (Map configMap){
                     } 
                 }
             }
-            /* stage('sonar-analysis') {
+            stage('sonar-analysis') {
                 steps {
                     // 'My SonarQube Server' must match the name configured in Jenkins System Settings
-                     withSonarQubeEnv('sonar-server') {
+                     /* withSonarQubeEnv('sonar-server') {
                         sh "${tool 'sonar-8'}/bin/sonar-scanner"
-                    }
+                    } */
                     script {
                         sh "echo 'sonarqube analysis done'"
                     }
                 }
-            } */
-            /* stage('sonar-scan') {
+            }
+            stage('sonar-scan') {
                 steps {
                     timeout(time: 10, unit: 'MINUTES') {
                         script {
@@ -87,7 +87,7 @@ def call (Map configMap){
                         }
                     }
                 }
-            } */
+            }
             stage('library-scan') {
                 steps {
                     script {
